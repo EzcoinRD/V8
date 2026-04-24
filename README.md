@@ -1,49 +1,61 @@
-# EZ Coin Laundry App - iPhone Layout Update
+# EZ Coin Laundry Streamlit App — Priority Update
 
-This package updates the selected-business-day and inventory-adjustment version of the EZ Coin Laundry Streamlit app with a dedicated iPhone/mobile layout pass.
+This package builds on the April 21, 2026 evening baseline version.
 
-## Main improvements in this version
+## Priority updates included
 
-- Changed Streamlit layout from wide to centered for better phone display.
-- Added stronger mobile CSS for larger tap targets, rounded buttons, and tighter spacing.
-- Redesigned the global header so the selected business day, day status, user, language toggle, Main Menu, and Logout are easier to use on a phone.
-- Redesigned the Product entry screen so each product appears as a simple phone-friendly row:
-  - Product name
-  - Price
-  - Large minus button
-  - Large quantity display
-  - Large plus button
-- Changed the Sale Summary screen to show phone-readable cards first, with the full table tucked into an expander.
-- Changed Daily Overview, Purchases/Refunds, Inventory Received, Inventory Adjustments, and related activity sections to show card-style previews before full tables.
-- Kept the selected business day workflow:
-  - Defaults to the current day.
-  - Allows selecting another business day.
-  - Keeps the selected day active across pages.
-- Kept closed-day protection and reopen logic.
-- Kept inventory adjustments as an audit-trail transaction log.
+1. Purchases/Refunds now display on-screen in a visible daily table.
+2. Phone-friendly layout improvements:
+   - wider single-column feel
+   - larger buttons
+   - less reliance on sidebars
+   - tighter mobile spacing
+3. Reduced timeout/rerun pressure:
+   - most entry workflows now save through forms
+   - repeated database reads use short TTL caching
+4. Session-state improvements:
+   - product quantities stay stable while editing the cart
+   - counter pages maintain values until saved or changed
+5. Caching:
+   - products, summaries, and reports use Streamlit cache_data with short TTLs
+   - cache clears after database writes
+6. Reopen-day behavior remains protected:
+   - line-item detail stays in place
+   - closing a reopened day replaces prior closeout status so it does not double-count
 
-## Files
+## Default demo logins
 
-- `app.py` - Main Streamlit app
-- `requirements.txt` - Python dependencies for Streamlit Cloud
-- `README.md` - This guide
+- admin / admin123
+- editor / editor123
+- viewer / viewer123
 
-## Demo logins
+Change these before using real store data.
 
-- Admin: `admin` / `admin123`
-- Editor: `editor` / `editor123`
-- Viewer: `viewer` / `viewer123`
+## Deployment
 
-## GitHub update steps
+Upload these files to your GitHub repository:
 
-1. Upload/replace these files in your existing GitHub repository:
-   - `app.py`
-   - `requirements.txt`
-   - `README.md`
-2. Commit the change with a message such as:
-   - `iPhone layout update`
-3. Let Streamlit Cloud redeploy automatically, or reboot the app from Streamlit Cloud if needed.
+- app.py
+- requirements.txt
+- README.md
 
-## Notes
+Then redeploy your Streamlit app with `app.py` as the main file.
 
-This version was syntax-checked with Python compile. It was not fully browser-tested inside Streamlit Cloud from this environment. If Streamlit shows an error after deployment, copy the full error message and use it to troubleshoot the next patch.
+## Local run
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+## Compact iPhone Layout Update
+
+This version keeps the selected business day and inventory adjustment logic, but changes the product entry page to a compact phone layout:
+
+- Smaller buttons and tighter spacing to reduce scrolling.
+- Product name, price, minus, quantity, and plus controls fit on one compact row.
+- Added a product filter/search box to quickly find an item.
+- Reduced oversized mobile card spacing from the prior iPhone layout pass.
+- App page layout is centered instead of wide.
+
+Upload `app.py`, `requirements.txt`, and `README.md` to GitHub, replacing the existing files.

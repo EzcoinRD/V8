@@ -157,6 +157,31 @@ TEXT = {
         "select_product": "Select Product",
         "daily_activity": "Daily Activity",
         "reopen_warning": "Only admins can reopen a closed day.",
+        "select_business_day": "Select Business Day",
+        "active_business_day": "Active Business Day",
+        "closed_day_prompt": "This business day is closed. Reopen it before making changes.",
+        "open_selected_day": "Open / Reopen Selected Day",
+        "inventory_adjustments": "Inventory Adjustments",
+        "inventory_position": "Inventory Position",
+        "adjustment_type": "Adjustment Type",
+        "quantity_change": "Quantity Change",
+        "positive_or_negative": "Use positive numbers to add inventory and negative numbers to remove inventory.",
+        "count_correction": "Count Correction",
+        "damage_spoilage": "Damage / Spoilage",
+        "theft_loss": "Theft / Loss",
+        "found_inventory": "Found Inventory",
+        "entry_correction": "Entry Correction",
+        "other": "Other",
+        "adjustment_saved": "Inventory adjustment saved",
+        "business_date": "Business Date",
+        "entered_at": "Entered At",
+        "entered_by": "Entered By",
+        "opening_inventory": "Opening Inventory",
+        "received_units": "Received Units",
+        "sold_units": "Sold Units",
+        "adjusted_units": "Adjusted Units",
+        "calculated_on_hand": "Calculated On Hand",
+        "selected_day_help": "The app defaults to today, but you can select another business day for missed entries or corrections.",
     },
     "es": {
         "app_title": "EZ Coin Laundry",
@@ -276,6 +301,31 @@ TEXT = {
         "select_product": "Seleccione Producto",
         "daily_activity": "Actividad Diaria",
         "reopen_warning": "Solo administradores pueden reabrir un día cerrado.",
+        "select_business_day": "Seleccionar Día de Trabajo",
+        "active_business_day": "Día de Trabajo Activo",
+        "closed_day_prompt": "Este día de trabajo está cerrado. Reábralo antes de hacer cambios.",
+        "open_selected_day": "Abrir / Reabrir Día Seleccionado",
+        "inventory_adjustments": "Ajustes de Inventario",
+        "inventory_position": "Posición de Inventario",
+        "adjustment_type": "Tipo de Ajuste",
+        "quantity_change": "Cambio de Cantidad",
+        "positive_or_negative": "Use números positivos para agregar inventario y negativos para quitar inventario.",
+        "count_correction": "Corrección de Conteo",
+        "damage_spoilage": "Daño / Merma",
+        "theft_loss": "Robo / Pérdida",
+        "found_inventory": "Inventario Encontrado",
+        "entry_correction": "Corrección de Entrada",
+        "other": "Otro",
+        "adjustment_saved": "Ajuste de inventario guardado",
+        "business_date": "Fecha de Trabajo",
+        "entered_at": "Ingresado En",
+        "entered_by": "Ingresado Por",
+        "opening_inventory": "Inventario Inicial",
+        "received_units": "Unidades Recibidas",
+        "sold_units": "Unidades Vendidas",
+        "adjusted_units": "Unidades Ajustadas",
+        "calculated_on_hand": "Existencia Calculada",
+        "selected_day_help": "La aplicación usa el día actual por defecto, pero puede seleccionar otro día de trabajo para entradas faltantes o correcciones.",
     },
 }
 
@@ -291,6 +341,7 @@ PRODUCTS = [
 PURCHASE_CATEGORIES = ["Toilet paper", "Bleach", "Cleaning supplies", "Clean rags", "Other"]
 REFUND_ISSUES = ["Too many clothes", "Too much soap", "Drained too quickly", "Did not spin", "Not enough water"]
 ADJUSTMENT_TYPES = ["Cash Added", "Cash Taken", "Coin Added", "Coin Taken"]
+INVENTORY_ADJUSTMENT_TYPES = ["Count Correction", "Damage / Spoilage", "Theft / Loss", "Found Inventory", "Entry Correction", "Other"]
 
 
 def get_conn():
@@ -448,6 +499,22 @@ def init_db():
                 recorded_by TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'Saved'
             );
+            CREATE TABLE IF NOT EXISTS inventory_adjustments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                adjustment_id TEXT NOT NULL,
+                business_date TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                product_id TEXT NOT NULL,
+                product_name TEXT NOT NULL,
+                qty_change INTEGER NOT NULL,
+                adjustment_type TEXT NOT NULL,
+                notes TEXT,
+                recorded_by TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Saved',
+                voided_by TEXT,
+                voided_timestamp TEXT,
+                void_reason TEXT
+            );
             CREATE TABLE IF NOT EXISTS cash_adjustments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 business_date TEXT NOT NULL,
@@ -494,6 +561,7 @@ def init_db():
                 ("comment", "TEXT"), ("voided_by", "TEXT"), ("voided_timestamp", "TEXT"), ("void_reason", "TEXT")
             ],
             "day_close": [("products_sold_count", "INTEGER NOT NULL DEFAULT 0")],
+            "inventory_adjustments": [("voided_by", "TEXT"), ("voided_timestamp", "TEXT"), ("void_reason", "TEXT")],
         }
         for table, cols in migrations.items():
             existing = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
@@ -572,6 +640,27 @@ def is_day_closed(day_str: str) -> bool:
     return get_day_status(day_str) == "Closed"
 
 
+def reopen_business_day(day_str: str, reason: str = ""):
+    execute("UPDATE day_close SET status = 'Reopened' WHERE business_date = ? AND status = 'Closed'", (day_str,))
+    execute("INSERT INTO day_reopen_log (business_date, reopened_timestamp, reopened_by, reason) VALUES (?, ?, ?, ?)", (day_str, now_iso(), current_user(), reason))
+
+
+def render_closed_day_prompt():
+    st.warning(t("closed_day_prompt"))
+    if current_role() == "admin":
+        with st.form(f"reopen_inline_{business_date()}"):
+            reason = st.text_area(t("reopen_reason"), key=f"inline_reason_{business_date()}")
+            reopen = st.form_submit_button(t("open_selected_day"), use_container_width=True)
+        if reopen:
+            reopen_business_day(business_date(), reason)
+            st.success(t("day_reopened"))
+            st.rerun()
+    else:
+        st.info(t("reopen_warning"))
+    return_to_menu_button()
+    st.stop()
+
+
 def require_role(*roles: str):
     if current_role() not in roles:
         st.error(t("insufficient_permissions"))
@@ -580,8 +669,7 @@ def require_role(*roles: str):
 
 def guard_open_day():
     if is_day_closed(business_date()):
-        st.error(t("day_closed"))
-        st.stop()
+        render_closed_day_prompt()
 
 
 def require_editor_or_admin_open_day():
@@ -624,6 +712,44 @@ def summary_totals(day_str: str) -> dict:
         "net_adjustments": round(adjustments, 2),
     }
 
+
+
+@st.cache_data(ttl=15, show_spinner=False)
+def inventory_position_df() -> pd.DataFrame:
+    return query_df(
+        """
+        WITH received AS (
+            SELECT product_id, COALESCE(SUM(units_added),0) AS received_units
+            FROM inventory_receipts
+            WHERE status != 'Void'
+            GROUP BY product_id
+        ),
+        sold AS (
+            SELECT product_id, COALESCE(SUM(qty),0) AS sold_units
+            FROM sales_lines
+            WHERE status != 'Void'
+            GROUP BY product_id
+        ),
+        adjusted AS (
+            SELECT product_id, COALESCE(SUM(qty_change),0) AS adjusted_units
+            FROM inventory_adjustments
+            WHERE status != 'Void'
+            GROUP BY product_id
+        )
+        SELECT p.product_id AS Product_ID,
+               p.product_name AS Product,
+               COALESCE(p.starting_inventory_units,0) AS Opening_Inventory,
+               COALESCE(r.received_units,0) AS Received_Units,
+               COALESCE(s.sold_units,0) AS Sold_Units,
+               COALESCE(a.adjusted_units,0) AS Adjusted_Units,
+               COALESCE(p.starting_inventory_units,0) + COALESCE(r.received_units,0) - COALESCE(s.sold_units,0) + COALESCE(a.adjusted_units,0) AS Calculated_On_Hand
+        FROM products p
+        LEFT JOIN received r ON r.product_id = p.product_id
+        LEFT JOIN sold s ON s.product_id = p.product_id
+        LEFT JOIN adjusted a ON a.product_id = p.product_id
+        ORDER BY p.display_order, p.product_name
+        """
+    )
 
 def get_carry_forward_starting_cash(day_str: str) -> float:
     df = query_df("SELECT money_on_hand FROM day_close WHERE business_date < ? AND status = 'Closed' ORDER BY business_date DESC, id DESC LIMIT 1", (day_str,))
@@ -671,7 +797,18 @@ def render_login():
 
 
 def render_global_header():
-    st.markdown(f"**{t('today')}:** {business_date()} &nbsp;&nbsp; **{t('day_status')}:** {t('closed') if is_day_closed(business_date()) else t('open')}", unsafe_allow_html=True)
+    selected = st.date_input(
+        t("select_business_day"),
+        value=date.fromisoformat(business_date()),
+        help=t("selected_day_help"),
+        key="business_date_picker",
+    )
+    selected_iso = selected.isoformat()
+    if selected_iso != business_date():
+        st.session_state.business_date = selected_iso
+        st.session_state.cart = {}
+        st.rerun()
+    st.markdown(f"**{t('active_business_day')}:** {business_date()} &nbsp;&nbsp; **{t('day_status')}:** {t('closed') if is_day_closed(business_date()) else t('open')}", unsafe_allow_html=True)
     cols = st.columns(4)
     if cols[0].button("English", use_container_width=True):
         change_lang("en")
@@ -718,7 +855,8 @@ def render_main_menu():
              (t("close_day"), "close_day", current_role() not in {"admin", "editor"}),
              (t("reports"), "reports", current_role() not in {"admin", "viewer"}),
              (t("admin"), "admin", current_role() != "admin"),
-             (t("inventory_received"), "inventory_received", current_role() != "admin")]
+             (t("inventory_received"), "inventory_received", current_role() != "admin"),
+             (t("inventory_adjustments"), "inventory_adjustments", current_role() != "admin")]
     for label, page, disabled in pages:
         nav_button(label, page, disabled)
 
@@ -813,11 +951,7 @@ def render_sale_summary():
                 """,
                 params,
             )
-            # Inventory is tracked as an optional running unit value in products.
-            with closing(get_conn()) as conn:
-                for _, _, _, pid, _, _, qty, _, _ in params:
-                    conn.execute("UPDATE products SET starting_inventory_units = COALESCE(starting_inventory_units,0) - ? WHERE product_id = ?", (qty, pid))
-                conn.commit()
+            # Inventory is calculated from transaction history: opening inventory + receipts - sales +/- adjustments.
             clear_data_cache()
             st.session_state.cart = {}
             st.session_state.flash_message = f"{t('sale_saved')} | {t('total_collected')}: ${total:.2f}"
@@ -986,6 +1120,12 @@ def render_daily_overview():
     else:
         df["timestamp"] = df["timestamp"].apply(fmt_ts)
         st.dataframe(df, use_container_width=True, hide_index=True)
+    st.markdown(f"### {t('inventory_position')}")
+    pos = inventory_position_df()
+    if pos.empty:
+        st.info(t("no_entries"))
+    else:
+        st.dataframe(pos, use_container_width=True, hide_index=True)
     return_to_menu_button()
 
 
@@ -1003,8 +1143,7 @@ def render_close_day():
     st.title(t("close_day"))
     render_global_header()
     if is_day_closed(business_date()):
-        st.info(t("day_closed"))
-        return_to_menu_button()
+        render_closed_day_prompt()
         return
     totals = summary_totals(business_date())
     metrics = st.columns(4)
@@ -1059,6 +1198,7 @@ def render_inventory_received():
     require_role("admin")
     st.title(t("inventory_received"))
     render_global_header()
+    guard_open_day()
     products = fetch_products_df(True)
     if products.empty:
         st.info(t("no_entries"))
@@ -1077,15 +1217,72 @@ def render_inventory_received():
             units_added = int(units_per_case) * int(cases_received)
             receipt_id = str(uuid.uuid4())
             execute("INSERT INTO inventory_receipts (receipt_id, business_date, timestamp, product_id, product_name, units_per_case, cases_received, units_added, recorded_by, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Saved')", (receipt_id, business_date(), now_iso(), pid, product["product_name"], int(units_per_case), int(cases_received), units_added, current_user()))
-            execute("UPDATE products SET units_per_case = ?, starting_inventory_units = COALESCE(starting_inventory_units,0) + ? WHERE product_id = ?", (int(units_per_case), units_added, pid))
+            execute("UPDATE products SET units_per_case = ? WHERE product_id = ?", (int(units_per_case), pid))
             st.success(f"{units_added} units added")
             st.rerun()
-    df = query_df("SELECT timestamp, product_name, units_per_case, cases_received, units_added, recorded_by FROM inventory_receipts ORDER BY id DESC LIMIT 50")
+    df = query_df("SELECT business_date, timestamp, product_name, units_per_case, cases_received, units_added, recorded_by FROM inventory_receipts WHERE business_date = ? ORDER BY id DESC LIMIT 50", (business_date(),))
     if not df.empty:
         df["timestamp"] = df["timestamp"].apply(fmt_ts)
         st.dataframe(df, use_container_width=True, hide_index=True)
     return_to_menu_button()
 
+
+
+def render_inventory_adjustments():
+    require_role("admin")
+    st.title(t("inventory_adjustments"))
+    render_global_header()
+    guard_open_day()
+    products = fetch_products_df(True)
+    if products.empty:
+        st.info(t("no_entries"))
+        return_to_menu_button()
+        return
+
+    with st.form("inventory_adjustment_form", clear_on_submit=True):
+        selected = st.selectbox(t("select_product"), [f"{r.product_name} | {r.product_id}" for r in products.itertuples()])
+        pid = selected.split(" | ")[-1]
+        product = products[products["product_id"] == pid].iloc[0]
+        adjustment_type = st.selectbox(t("adjustment_type"), INVENTORY_ADJUSTMENT_TYPES)
+        qty_change = st.number_input(t("quantity_change"), step=1, value=0, help=t("positive_or_negative"))
+        notes = st.text_area(t("notes"))
+        submitted = st.form_submit_button(t("save"), use_container_width=True)
+    if submitted:
+        if int(qty_change) == 0:
+            st.warning(t("enter_value"))
+        else:
+            execute(
+                """
+                INSERT INTO inventory_adjustments
+                (adjustment_id, business_date, timestamp, product_id, product_name, qty_change, adjustment_type, notes, recorded_by, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Saved')
+                """,
+                (str(uuid.uuid4()), business_date(), now_iso(), pid, product["product_name"], int(qty_change), adjustment_type, notes, current_user()),
+            )
+            st.success(t("adjustment_saved"))
+            st.rerun()
+
+    st.markdown(f"### {t('inventory_position')}")
+    pos = inventory_position_df()
+    if not pos.empty:
+        st.dataframe(pos, use_container_width=True, hide_index=True)
+
+    st.markdown(f"### {t('inventory_adjustments')}")
+    df = query_df(
+        """
+        SELECT business_date, timestamp, product_name, qty_change, adjustment_type, notes, recorded_by, status
+        FROM inventory_adjustments
+        WHERE business_date = ?
+        ORDER BY id DESC
+        """,
+        (business_date(),),
+    )
+    if df.empty:
+        st.info(t("no_entries"))
+    else:
+        df["timestamp"] = df["timestamp"].apply(fmt_ts)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    return_to_menu_button()
 
 def cumulative_activity_df() -> pd.DataFrame:
     return query_df(
@@ -1147,8 +1344,7 @@ def render_admin():
             submitted = st.form_submit_button(t("reopen_day"), use_container_width=True)
         if submitted:
             ds = reopen_date.isoformat()
-            execute("UPDATE day_close SET status = 'Reopened' WHERE business_date = ? AND status = 'Closed'", (ds,))
-            execute("INSERT INTO day_reopen_log (business_date, reopened_timestamp, reopened_by, reason) VALUES (?, ?, ?, ?)", (ds, now_iso(), current_user(), reason))
+            reopen_business_day(ds, reason)
             st.session_state.business_date = ds
             st.success(t("day_reopened"))
             st.rerun()
@@ -1218,6 +1414,7 @@ def render_page():
     elif page == "daily_overview": render_daily_overview()
     elif page == "close_day": render_close_day()
     elif page == "inventory_received": render_inventory_received()
+    elif page == "inventory_adjustments": render_inventory_adjustments()
     elif page == "reports": render_reports()
     elif page == "admin": render_admin()
     else:

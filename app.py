@@ -851,14 +851,7 @@ def render_login():
     st.caption("Default demo logins: admin/admin123, editor/editor123, viewer/viewer123")
 
 def render_global_header():
-    """
-    Main header behavior:
-    - Landing/Main Menu shows the full business-day selector.
-    - Subpages only show the active working day/status so the screen stays cleaner.
-    """
-    on_main_menu = st.session_state.get("page", "main_menu") == "main_menu"
-
-    if on_main_menu:
+    with st.container():
         selected = st.date_input(
             t("select_business_day"),
             value=date.fromisoformat(business_date()),
@@ -870,45 +863,26 @@ def render_global_header():
             st.session_state.business_date = selected_iso
             st.session_state.cart = {}
             st.rerun()
-
-    status_label = t("closed") if is_day_closed(business_date()) else t("open")
-    st.markdown(
-        f"**{t('active_business_day')}:** {business_date()} &nbsp;&nbsp; **{t('day_status')}:** {status_label}",
-        unsafe_allow_html=True,
-    )
-
-    if on_main_menu:
-        cols = st.columns(3)
-        if cols[0].button("English", use_container_width=True):
-            change_lang("en")
+        status_label = t("closed") if is_day_closed(business_date()) else t("open")
+        render_card(
+            f"{t('active_business_day')}: {business_date()}",
+            [f"<b>{t('day_status')}:</b> {status_label}", f"<b>{t('recorded_by')}:</b> {current_user()}"],
+        )
+        lang_choice = st.radio(t("language"), ["English", "Español"], horizontal=True, index=1 if st.session_state.get("lang", "en") == "es" else 0, key="language_toggle")
+        desired = "es" if lang_choice == "Español" else "en"
+        if desired != st.session_state.get("lang", "en"):
+            change_lang(desired)
             st.rerun()
-        if cols[1].button("Español", use_container_width=True):
-            change_lang("es")
-            st.rerun()
-        if cols[2].button(t("logout"), use_container_width=True):
-            lang = st.session_state.get("lang", "en")
-            st.session_state.clear()
-            ensure_state()
-            st.session_state.lang = lang
-            st.rerun()
-    else:
-        cols = st.columns(4)
-        if cols[0].button("English", use_container_width=True):
-            change_lang("en")
-            st.rerun()
-        if cols[1].button("Español", use_container_width=True):
-            change_lang("es")
-            st.rerun()
-        if cols[2].button(t("main_menu"), use_container_width=True):
+        c1, c2 = st.columns(2)
+        if c1.button(t("main_menu"), use_container_width=True, key=f"header_menu_{st.session_state.page}"):
             st.session_state.page = "main_menu"
             st.rerun()
-        if cols[3].button(t("logout"), use_container_width=True):
+        if c2.button(t("logout"), use_container_width=True, key=f"header_logout_{st.session_state.page}"):
             lang = st.session_state.get("lang", "en")
             st.session_state.clear()
             ensure_state()
             st.session_state.lang = lang
             st.rerun()
-
 
 def return_to_menu_button():
     if st.button(t("return_to_menu"), use_container_width=True, key=f"return_{st.session_state.page}"):

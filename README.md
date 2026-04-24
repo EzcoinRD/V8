@@ -1,61 +1,27 @@
-# EZ Coin Laundry Streamlit App — Priority Update
+# EZ Coin Laundry App - Landing Page Date Selector Update
 
-This package builds on the April 21, 2026 evening baseline version.
+This update is based on the selected business day + inventory adjustment version.
 
-## Priority updates included
+## What changed
 
-1. Purchases/Refunds now display on-screen in a visible daily table.
-2. Phone-friendly layout improvements:
-   - wider single-column feel
-   - larger buttons
-   - less reliance on sidebars
-   - tighter mobile spacing
-3. Reduced timeout/rerun pressure:
-   - most entry workflows now save through forms
-   - repeated database reads use short TTL caching
-4. Session-state improvements:
-   - product quantities stay stable while editing the cart
-   - counter pages maintain values until saved or changed
-5. Caching:
-   - products, summaries, and reports use Streamlit cache_data with short TTLs
-   - cache clears after database writes
-6. Reopen-day behavior remains protected:
-   - line-item detail stays in place
-   - closing a reopened day replaces prior closeout status so it does not double-count
+- The full business-day date selector now appears on the Main Menu / landing page only.
+- The app still defaults to the current day.
+- The selected business day remains active as the user moves through the app.
+- Subpages show the active business day and day status as a small label, but do not show the full date picker.
+- Sales, bathroom entries, customer counts, change given, purchases/refunds, Daily Overview, Close Day, reopen-day logic, Inventory Received, and Inventory Adjustments continue to use the active selected business day.
+- Selected-day closed/open protection remains in place.
+- Inventory Adjustments and transaction-log inventory calculation remain in place.
 
-## Default demo logins
+## Files
 
-- admin / admin123
-- editor / editor123
-- viewer / viewer123
+Upload these files to GitHub:
 
-Change these before using real store data.
+- `app.py`
+- `requirements.txt`
+- `README.md`
 
-## Deployment
+## Notes for Codex handoff
 
-Upload these files to your GitHub repository:
+Next recommended Codex task:
 
-- app.py
-- requirements.txt
-- README.md
-
-Then redeploy your Streamlit app with `app.py` as the main file.
-
-## Local run
-
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-## Compact iPhone Layout Update
-
-This version keeps the selected business day and inventory adjustment logic, but changes the product entry page to a compact phone layout:
-
-- Smaller buttons and tighter spacing to reduce scrolling.
-- Product name, price, minus, quantity, and plus controls fit on one compact row.
-- Added a product filter/search box to quickly find an item.
-- Reduced oversized mobile card spacing from the prior iPhone layout pass.
-- App page layout is centered instead of wide.
-
-Upload `app.py`, `requirements.txt`, and `README.md` to GitHub, replacing the existing files.
+Review this Streamlit laundromat app and continue improving usability without removing the selected business-day workflow. Keep the date selector on the Main Menu only. Subpages should display the active business day clearly but should not include a full date picker. Preserve closed-day protection, reopen-day logic, inventory adjustments, purchases/refunds display, bilingual support, and cumulative export.
